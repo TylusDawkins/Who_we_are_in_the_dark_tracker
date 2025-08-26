@@ -38,6 +38,9 @@ import { createSignal, createMemo, createEffect, onMount, batch, Show, For } fro
       const [actionDuration, setActionDuration] = createSignal(3);
       const [recoveryDuration, setRecoveryDuration] = createSignal(3);
 
+      let advanceTimer = null;
+      let isAdvancing = false;
+
       const readyIds = createMemo(() => units().filter(u => u.active <= 0 && u.passive <= 0).map(u => u.id));
 
       const currentId = createMemo(() => {
@@ -87,51 +90,23 @@ import { createSignal, createMemo, createEffect, onMount, batch, Show, For } fro
         });
       }
 
-      function advanceToNextReady() {
+      function advanceTime() {
         const list = units();
         if (list.length === 0) return;
-        if (list.some(u => u.active <= 0 && u.passive <= 0)) return; // already ready
-
-        let working = list.map(u => ({ ...u }));
-        let virtualNow = now();
-        const events = [];
-
-        const commit = (delta) => {
-          virtualNow += delta;
-          for (const u of working) {
-            u.active = clamp(u.active - delta);
-            u.passive = clamp(u.passive - delta);
+        if (isAdvancing) return;
+        const alreadyReady = list.some(u => u.active <= 0 && u.passive <= 0);
+        if (alreadyReady) return;
+        isAdvancing = true;
+        advanceTimer = setInterval(() => {
+          step(1);
+          const anyReady = units().some(u => u.active <= 0 && u.passive <= 0);
+          const noneLeft = units().length === 0;
+          if (anyReady || noneLeft) {
+            clearInterval(advanceTimer);
+            advanceTimer = null;
+            isAdvancing = false;
           }
-        };
-
-        const logResolves = (before, after) => {
-          for (let i = 0; i < before.length; i++) {
-            if (before[i].passive > 0 && after[i].passive === 0) {
-              events.push(`[${virtualNow.toFixed(1)}s] ${after[i].name}’s action resolves.`);
-            }
-          }
-        };
-
-        let guard = 0;
-        while (guard++ < 10000) {
-          const nextPassive = working.reduce((m, u) => Math.min(m, u.passive > 0 ? u.passive : Infinity), Infinity);
-          const nextActive  = working.reduce((m, u) => Math.min(m, u.active  > 0 ? u.active  : Infinity), Infinity);
-          const delta = Math.min(nextPassive, nextActive);
-          if (!Number.isFinite(delta) || delta <= 0) break;
-
-          const snap = working.map(u => ({ ...u }));
-          commit(delta);
-          logResolves(snap, working);
-
-          if (working.some(u => u.active <= 0 && u.passive <= 0)) break;
-        }
-
-        if (virtualNow > now()) {
-          // Apply computed future
-          for (const e of events) setLog(prev => [e, ...(prev || [])]);
-          setNow(virtualNow);
-          setUnits(working);
-        }
+        }, 250);
       }
 
       function applyAction() {
@@ -153,7 +128,7 @@ import { createSignal, createMemo, createEffect, onMount, batch, Show, For } fro
           : `${u.name} starts action for ${fmt(pas)} (recovery = ${fmt(act)}).`;
         pushLog(note);
 
-        if (autoAdvance()) queueMicrotask(advanceToNextReady);
+        if (autoAdvance()) queueMicrotask(advanceTime);
       }
 
       function cancelCast(id) {
@@ -187,7 +162,7 @@ import { createSignal, createMemo, createEffect, onMount, batch, Show, For } fro
         if (!autoAdvance()) return;
         if (units().length === 0) return;
         const anyReady = units().some(u => u.active <= 0 && u.passive <= 0);
-        if (!anyReady) advanceToNextReady();
+        if (!anyReady) advanceTime();
       });
 
       const sorted = createMemo(() => {
@@ -199,7 +174,6 @@ import { createSignal, createMemo, createEffect, onMount, batch, Show, For } fro
           const an = Math.min(a.active > 0 ? a.active : Infinity, a.passive > 0 ? a.passive : Infinity);
           const bn = Math.min(b.active > 0 ? b.active : Infinity, b.passive > 0 ? b.passive : Infinity);
           if (an !== bn) return an - bn;
-          if (a.initiative !== b.initiative) return b.initiative - a.initiative; // ← Add this line
           return a.addedAt - b.addedAt;
         });
         return copy;
@@ -218,7 +192,7 @@ import { createSignal, createMemo, createEffect, onMount, batch, Show, For } fro
                   <input type="checkbox" class="size-4 accent-indigo-500" checked={autoAdvance()} onInput={e => setAutoAdvance(e.currentTarget.checked)} />
                   <span class="text-slate-300">Auto‑advance</span>
                 </label>
-                <button onClick={advanceToNextReady} class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 transition border border-indigo-400/30 shadow-sm">Advance to next ready</button>
+                <button onClick={advanceTime} class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 transition border border-indigo-400/30 shadow-sm">Advance to next ready</button>
                 <button onClick={() => step(1)} class="px-3 py-1.5 rounded bg-slate-600 hover:bg-slate-500 active:bg-slate-700 transition border border-slate-400/30 shadow-sm">+1s</button>
                 <button onClick={() => step(0.5)} class="px-3 py-1.5 rounded bg-slate-600 hover:bg-slate-500 active:bg-slate-700 transition border border-slate-400/30 shadow-sm">+0.5s</button>
                 <button onClick={resetAll} class="px-3 py-1.5 rounded border border-rose-400/30 hover:bg-rose-500/10 text-rose-300">Reset</button>
@@ -295,7 +269,7 @@ import { createSignal, createMemo, createEffect, onMount, batch, Show, For } fro
             <aside class="space-y-4">
               <div class="rounded-2xl border border-slate-800 p-4 bg-slate-900/40">
                 <h2 class="text-lg font-semibold mb-2">Turn Panel</h2>
-                <Show when={current()} fallback={<div class="text-slate-400 text-sm">No one is ready yet.<div class="mt-2"><button onClick={advanceToNextReady} class="px-3 py-2 rounded border border-slate-700 hover:bg-slate-800">Advance to next ready</button></div></div>}>
+                <Show when={current()} fallback={<div class="text-slate-400 text-sm">No one is ready yet.<div class="mt-2"><button onClick={advanceTime} class="px-3 py-2 rounded border border-slate-700 hover:bg-slate-800">Advance to next ready</button></div></div>}>
                   <div class="space-y-3">
                     <div class="text-sm text-slate-300">Current ready unit:</div>
                     <div class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
