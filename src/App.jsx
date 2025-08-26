@@ -1,4 +1,5 @@
 import { createSignal, createMemo, createEffect, onMount, batch, Show, For } from "solid-js";
+import "./App.css";
 
     // ---------- Utilities ----------
     const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -28,7 +29,7 @@ import { createSignal, createMemo, createEffect, onMount, batch, Show, For } fro
       const [now, setNow] = createSignal(0);
       const [units, setUnits] = createSignal([]);
       const [log, setLog] = createSignal([]);
-      const [autoAdvance, setAutoAdvance] = createSignal(true);
+      const [autoAdvance, setAutoAdvance] = createSignal(false);
       const [separateRecovery, setSeparateRecovery] = createSignal(false);
       const [selectedId, setSelectedId] = createSignal(null);
 
@@ -276,16 +277,16 @@ import { createSignal, createMemo, createEffect, onMount, batch, Show, For } fro
                 <h2 class="text-lg font-semibold mb-2">Turn Panel</h2>
                 <Show when={current()} fallback={<div class="text-slate-400 text-sm">No one is ready yet.<div class="mt-2"><button onClick={advanceTime} class="px-3 py-2 rounded border border-slate-700 hover:bg-slate-800">Advance to next ready</button></div></div>}>
                   <div class="space-y-3">
-                    <div class="text-sm text-slate-300">Current ready unit:</div>
+                    <div class="text-lg text-slate-300 current-unit-header">Current ready unit:</div>
                     <div class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
                       <div>
-                        <div class="font-medium">{current().name}</div>
+                        <div class="current-unit-name">{current().name}</div>
                         <div class="text-xs text-slate-400">{current().role}</div>
                       </div>
                       <div class="text-xs text-slate-400">active {fmt(current().active)} · passive {fmt(current().passive)}</div>
                     </div>
 
-                    <div class="grid gap-2">
+                    <div class="grid gap-2 time-inputs">
                       <label class="text-sm text-slate-300">Action duration (passive time)</label>
                       <input type="number" step="0.1" min="0" value={actionDuration()} onInput={e => setActionDuration(Number(e.currentTarget.value))} class="px-3 py-2 rounded border border-slate-700 bg-slate-900" />
 
@@ -294,12 +295,8 @@ import { createSignal, createMemo, createEffect, onMount, batch, Show, For } fro
                         Use separate recovery (active) time
                       </label>
 
-                      <Show when={separateRecovery()}>
-                        <>
-                          <label class="text-sm text-slate-300">Recovery time (active time)</label>
-                          <input type="number" step="0.1" min="0" value={recoveryDuration()} onInput={e => setRecoveryDuration(Number(e.currentTarget.value))} class="px-3 py-2 rounded border border-slate-700 bg-slate-900" />
-                        </>
-                      </Show>
+                      <label class="text-sm text-slate-300">Recovery time (active time)</label>
+                      <input type="number" step="0.1" min="0" value={recoveryDuration()} onInput={e => setRecoveryDuration(Number(e.currentTarget.value))} class="px-3 py-2 rounded border border-slate-700 bg-slate-900" />
 
                       <div class="flex gap-2 mt-2">
                         <button onClick={applyAction} class="flex-1 px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 transition border border-indigo-400/30">Apply action to {current()?.name}</button>
