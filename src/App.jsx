@@ -83,8 +83,11 @@ import { createSignal, createMemo, createEffect, onMount, batch, Show, For } fro
         setUnits(prev => {
           const next = (prev || []).map(u => ({ ...u }));
           for (const u of next) {
-            u.active = clamp(u.active - delta);
-            u.passive = clamp(u.passive - delta);
+            if (u.passive > 0) {
+              u.passive = clamp(u.passive - delta);
+            } else if (u.active > 0) {
+              u.active = clamp(u.active - delta);
+            }
           }
           return next;
         });
@@ -234,9 +237,11 @@ import { createSignal, createMemo, createEffect, onMount, batch, Show, For } fro
                           const ready = u.active <= 0 && u.passive <= 0;
                           const status = ready
                             ? "Ready"
-                            : u.passive > 0
-                              ? `Casting… resolves in ${fmt(u.passive)}`
-                              : `Recovering… ready in ${fmt(u.active)}`;
+                            : u.passive > 0 && u.active > 0
+                              ? `Casting… resolves in ${fmt(u.passive)}, resting for ${fmt(u.active)}`
+                              : u.passive > 0
+                                ? `Casting… resolves in ${fmt(u.passive)}`
+                                : `Recovering… ready in ${fmt(u.active)}`;
                           const isSelected = (selectedId() || currentId()) === u.id;
                                                       return (
                               <tr class={isSelected ? "bg-slate-900/50" : ""}>
